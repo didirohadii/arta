@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "301510488418",
+    "project_id": "arta-e0c53",
+    "storage_bucket": "arta-e0c53.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:301510488418:android:5aee59f34a754aa8cfbc3b",
+        "android_client_info": {
+          "package_name": "com.example.arta"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "301510488418-m51a6tjui8a3k3rnkb61utacp2qrsaon.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.arta",
+            "certificate_hash": "04113172a7ecc0b7920a86ccef474218ac6588a8"
+          }
+        },
+        {
+          "client_id": "301510488418-5au8dn3nf7jrbu9vl3um360kmpvf2c2b.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDYP5gd-iBb2Odv_gwnSXWjN2YNRSVqwGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "301510488418-5au8dn3nf7jrbu9vl3um360kmpvf2c2b.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "301510488418-9qctka3n5i7tgdprngvfrto7tt50bvqt.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.arta"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

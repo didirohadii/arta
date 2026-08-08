@@ -2,15 +2,17 @@ class BudgetModel {
   final String id;
   final String category;
   final double amount;
-  final int month;
-  final int year;
+
+  /// Periode budget
+  final DateTime startDate;
+  final DateTime endDate;
 
   const BudgetModel({
     required this.id,
     required this.category,
     required this.amount,
-    required this.month,
-    required this.year,
+    required this.startDate,
+    required this.endDate,
   });
 
   Map<String, dynamic> toMap() {
@@ -18,8 +20,8 @@ class BudgetModel {
       "id": id,
       "category": category,
       "amount": amount,
-      "month": month,
-      "year": year,
+      "startDate": startDate.toIso8601String(),
+      "endDate": endDate.toIso8601String(),
     };
   }
 
@@ -28,8 +30,8 @@ class BudgetModel {
       id: map["id"],
       category: map["category"],
       amount: (map["amount"] as num).toDouble(),
-      month: map["month"],
-      year: map["year"],
+      startDate: DateTime.parse(map["startDate"]),
+      endDate: DateTime.parse(map["endDate"]),
     );
   }
 }

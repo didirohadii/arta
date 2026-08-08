@@ -4,15 +4,61 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/currency_text.dart';
 import '../../../data/models/budget_model.dart';
 import '../../../services/financial_service.dart';
-// Menggunakan package import agar seragam dengan main/app.dart kamu
 import 'package:arta/main.dart';
 import 'add_budget_bottom_sheet.dart';
 
-class BudgetCard extends StatelessWidget {
+class BudgetCard extends StatefulWidget {
   const BudgetCard({super.key});
 
-  void _showBudgetForm(BuildContext context, {BudgetModel? budget}) async {
-    final result = await showModalBottomSheet<String>(
+  @override
+  State<BudgetCard> createState() => _BudgetCardState();
+}
+
+class _BudgetCardState extends State<BudgetCard> {
+  late DateTime selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Default filter: bulan saat ini
+    final now = DateTime.now();
+    selectedMonth = DateTime(now.year, now.month);
+  }
+
+  String get monthName {
+    const months = [
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
+    ];
+
+    return months[selectedMonth.month - 1];
+  }
+
+  Future<void> changeMonth(int offset) async {
+    setState(() {
+      selectedMonth = DateTime(
+        selectedMonth.year,
+        selectedMonth.month + offset,
+      );
+    });
+  }
+
+  Future<void> showBudgetForm(
+    BuildContext context, {
+    BudgetModel? budget,
+  }) async {
+    final result = await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -21,14 +67,14 @@ class BudgetCard extends StatelessWidget {
       builder: (_) => AddBudgetBottomSheet(budget: budget),
     );
 
-    // FIX UTAMA: Tangkap string result dan kasih jeda animasi nutup bottom sheet
     if (result != null) {
       await Future.delayed(const Duration(milliseconds: 150));
 
       String message = "";
-      if (result == 'success_add') {
+
+      if (result == "success_add") {
         message = "Budget berhasil ditambahkan";
-      } else if (result == 'success_update') {
+      } else if (result == "success_update") {
         message = "Budget berhasil diperbarui";
       }
 
@@ -45,10 +91,16 @@ class BudgetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
+    return ValueListenableBuilder(
       valueListenable: FinancialService.refreshNotifier,
       builder: (context, _, _) {
-        final budgets = FinancialService.getBudgets();
+        final allBudgets = FinancialService.getBudgets();
+
+        // FILTER BERDASARKAN BULAN TANGGAL AKHIR
+        final budgets = allBudgets.where((budget) {
+          return budget.endDate.month == selectedMonth.month &&
+              budget.endDate.year == selectedMonth.year;
+        }).toList();
 
         return AppCard(
           child: Column(
@@ -62,19 +114,54 @@ class BudgetCard extends StatelessWidget {
                   ),
                   const Spacer(),
                   FilledButton.icon(
-                    onPressed: () => _showBudgetForm(context),
+                    onPressed: () => showBudgetForm(context),
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text("Tambah"),
                   ),
                 ],
               ),
+
+              const SizedBox(height: 16),
+
+              // FILTER BULAN
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => changeMonth(-1),
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          "$monthName ${selectedMonth.year}",
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+
+                    IconButton(
+                      onPressed: () => changeMonth(1),
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 20),
+
               if (budgets.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 30),
                   child: Center(
                     child: Text(
-                      "Belum ada budget bulan ini.",
+                      "Belum ada budget pada periode ini.",
                       style: TextStyle(color: Colors.grey),
                     ),
                   ),
@@ -82,7 +169,9 @@ class BudgetCard extends StatelessWidget {
               else
                 ...budgets.map((budget) {
                   final spent = FinancialService.getBudgetSpent(budget);
+
                   final progress = FinancialService.getBudgetProgress(budget);
+
                   Color progressColor;
 
                   if (progress >= 1) {
@@ -100,13 +189,15 @@ class BudgetCard extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              budget.category,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: Text(
+                                budget.category,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                            const Spacer(),
+
                             Text(
                               "${(progress * 100).clamp(0, 999).toStringAsFixed(0)}%",
                               style: TextStyle(
@@ -114,18 +205,20 @@ class BudgetCard extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+
                             PopupMenuButton<String>(
                               icon: const Icon(Icons.more_vert, size: 20),
                               padding: EdgeInsets.zero,
                               onSelected: (value) async {
                                 if (value == "edit") {
-                                  _showBudgetForm(context, budget: budget);
-                                } else if (value == "delete") {
+                                  showBudgetForm(context, budget: budget);
+                                }
+
+                                if (value == "delete") {
                                   await FinancialService.deleteBudget(
                                     budget.id,
                                   );
 
-                                  // Hapus juga dirubah menggunakan global key agar konsisten
                                   rootScaffoldMessengerKey.currentState
                                       ?.showSnackBar(
                                         const SnackBar(
@@ -152,7 +245,24 @@ class BudgetCard extends StatelessWidget {
                             ),
                           ],
                         ),
+
+                        const SizedBox(height: 4),
+
+                        // PERIODE
+                        Text(
+                          "${budget.startDate.day}/${budget.startDate.month}/${budget.startDate.year}"
+                          " - "
+                          "${budget.endDate.day}/${budget.endDate.month}/${budget.endDate.year}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+
                         const SizedBox(height: 6),
+
                         Row(
                           children: [
                             CurrencyText(
@@ -177,14 +287,18 @@ class BudgetCard extends StatelessWidget {
                             ),
                           ],
                         ),
+
                         const SizedBox(height: 8),
+
                         LinearProgressIndicator(
                           value: progress.clamp(0, 1),
                           backgroundColor: Colors.grey.withValues(alpha: 0.2),
                           color: progressColor,
                           borderRadius: BorderRadius.circular(12),
                         ),
+
                         const SizedBox(height: 8),
+
                         if (progress >= 1)
                           const Text(
                             "⚠ Budget terlampaui",

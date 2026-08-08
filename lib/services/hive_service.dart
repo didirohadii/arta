@@ -7,6 +7,7 @@ class HiveService {
   static const String savingTargetBox = "saving_target";
   static const String assetHistoryBox = "asset_history_box";
   static const String budgetBox = "budget";
+  static const String categoryBox = "category";
   static const String authBox = "auth";
 
   static Future<void> init() async {
@@ -18,6 +19,7 @@ class HiveService {
     await Hive.openBox(savingTargetBox);
     await Hive.openBox(assetHistoryBox);
     await Hive.openBox(budgetBox);
+    await Hive.openBox(categoryBox);
     await Hive.openBox(authBox);
   }
 }

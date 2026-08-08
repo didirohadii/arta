@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/models/asset_history_model.dart';
 import '../data/models/budget_model.dart';
+import '../data/models/category_model.dart';
 import '../data/models/chart_data_model.dart';
 import '../data/models/net_worth_data_model.dart';
 import '../data/models/profile_model.dart';
@@ -12,6 +13,7 @@ import '../data/models/wallet_model.dart';
 // Import Repository
 import '../data/repositories/asset_history_repository.dart';
 import '../data/repositories/budget_repository.dart';
+import '../data/repositories/category_repository.dart';
 import '../data/repositories/profile_repository.dart';
 import '../data/repositories/saving_target_repository.dart';
 import '../data/repositories/transaction_repository.dart';
@@ -32,6 +34,7 @@ class FinancialService {
   static final BudgetRepository _budgetRepository = BudgetRepository();
   static final AssetHistoryRepository _assetHistoryRepository =
       AssetHistoryRepository();
+  static final CategoryRepository _categoryRepository = CategoryRepository();
 
   // Data history disimpan di memory runtime agar aman diakses oleh UI kapan saja
   static List<AssetHistoryModel> assetHistory = [];
@@ -52,6 +55,32 @@ class FinancialService {
   }
 
   /// ============================
+  /// CATEGORIES (CUSTOM)
+  /// ============================
+
+  static List<CategoryModel> getCustomCategories(String type) {
+    return _categoryRepository
+        .getAll()
+        .where((category) => category.type == type)
+        .toList();
+  }
+
+  static Future<void> addCustomCategory(CategoryModel category) async {
+    await _categoryRepository.add(category);
+    await notifyDataChanged();
+  }
+
+  /// Fungsi khusus simpan tanpa pemicu notify global agar tidak crash saat dialog tutup
+  static Future<void> addCustomCategorySilent(CategoryModel category) async {
+    await _categoryRepository.add(category);
+  }
+
+  static Future<void> deleteCustomCategory(String id) async {
+    await _categoryRepository.delete(id);
+    await notifyDataChanged();
+  }
+
+  /// ============================
   /// TOTAL ASSET
   /// ============================
 
@@ -59,9 +88,7 @@ class FinancialService {
     double total = 0;
 
     for (final wallet in getWallets()) {
-      // Lewati wallet emas agar tidak ikut terhitung ke Total Asset Rupiah
       if (wallet.isGold) continue;
-
       total += getWalletBalance(wallet.id);
     }
 
@@ -77,7 +104,6 @@ class FinancialService {
       (e) => e.id == walletId,
     );
 
-    // Wallet Emas diproses khusus (menggunakan gram)
     if (wallet.isGold) {
       return wallet.gram ?? 0;
     }
@@ -476,32 +502,49 @@ class FinancialService {
 
   static bool budgetExists({
     required String category,
-    required int month,
-    required int year,
+    required DateTime startDate,
+    required DateTime endDate,
     String? excludeId,
   }) {
     return getBudgets().any(
       (budget) =>
           budget.category == category &&
-          budget.month == month &&
-          budget.year == year &&
+          budget.startDate == startDate &&
+          budget.endDate == endDate &&
           budget.id != excludeId,
     );
   }
 
-  // Menghitung pengeluaran berdasarkan kategori tertentu
   static double getExpenseByCategory({
     required String category,
-    required int month,
-    required int year,
+    required DateTime startDate,
+    required DateTime endDate,
   }) {
     double total = 0;
 
+    final targetCategory = category.trim().toLowerCase();
+
+    final start = DateTime(startDate.year, startDate.month, startDate.day);
+
+    final end = DateTime(
+      endDate.year,
+      endDate.month,
+      endDate.day,
+      23,
+      59,
+      59,
+      999,
+    );
+
     for (final trx in _transactionRepository.getAll()) {
       if (trx.type != TransactionType.expense) continue;
-      if (trx.category != category) continue;
-      if (trx.date.month != month) continue;
-      if (trx.date.year != year) continue;
+
+      if (trx.category.trim().toLowerCase() != targetCategory) {
+        continue;
+      }
+
+      if (trx.date.isBefore(start)) continue;
+      if (trx.date.isAfter(end)) continue;
 
       total += trx.amount;
     }
@@ -512,8 +555,8 @@ class FinancialService {
   static double getBudgetUsed(BudgetModel budget) {
     return getExpenseByCategory(
       category: budget.category,
-      month: budget.month,
-      year: budget.year,
+      startDate: budget.startDate,
+      endDate: budget.endDate,
     );
   }
 
@@ -523,12 +566,15 @@ class FinancialService {
 
   static double getBudgetProgress(BudgetModel budget) {
     final spent = getBudgetUsed(budget);
+
     if (budget.amount == 0) return 0;
+
     return spent / budget.amount;
   }
 
   static double getBudgetRemaining(BudgetModel budget) {
     final remain = budget.amount - getBudgetUsed(budget);
+
     return remain < 0 ? 0 : remain;
   }
 

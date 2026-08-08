@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
+import 'package:arta/core/constants/category_constants.dart';
+import '../../data/models/category_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../data/models/wallet_model.dart';
 import '../../services/financial_service.dart';
-
-// 1. IMPORT FILE KONSTANTA KATEGORI BARU
-import 'package:arta/core/constants/category_constants.dart';
 
 class AddTransactionPage extends StatefulWidget {
   final TransactionModel? transaction;
@@ -22,14 +22,19 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   WalletModel? selectedWallet;
   WalletModel? transferWallet;
 
-  // Default kategori kita set ke "Lainnya" karena ada di kedua list (income & expense)
   String selectedCategory = "Lainnya";
   DateTime selectedDate = DateTime.now();
+
+  List<CategoryModel> customCategories = [];
 
   final amountController = TextEditingController();
   final noteController = TextEditingController();
 
-  // (CATATAN: List 'categories' statis yang lama sudah DIHAPUS dari sini)
+  void _loadCustomCategories() {
+    final type = selectedType == TransactionType.income ? "income" : "expense";
+
+    customCategories = FinancialService.getCustomCategories(type);
+  }
 
   @override
   void initState() {
@@ -74,6 +79,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         }
       }
     }
+
+    _loadCustomCategories();
   }
 
   @override
@@ -83,11 +90,147 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     super.dispose();
   }
 
+  Future<void> _addCustomCategory() async {
+    final String? categoryName = await showDialog<String>(
+      context: context,
+      builder: (context) => const _AddCategoryDialog(),
+    );
+
+    if (categoryName == null || categoryName.trim().isEmpty || !mounted) return;
+
+    final cleanName = categoryName.trim();
+    final type = selectedType == TransactionType.income ? "income" : "expense";
+
+    final defaultCategories = selectedType == TransactionType.income
+        ? CategoryConstants.income
+        : CategoryConstants.expense;
+
+    final fetchedCategories = FinancialService.getCustomCategories(type);
+
+    final exists = [
+      ...defaultCategories,
+      ...fetchedCategories.map((e) => e.name),
+    ].any((cat) => cat.toLowerCase() == cleanName.toLowerCase());
+
+    if (exists) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Kategori tersebut sudah ada")),
+      );
+      return;
+    }
+
+    await FinancialService.addCustomCategorySilent(
+      CategoryModel(id: const Uuid().v4(), name: cleanName, type: type),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _loadCustomCategories();
+      selectedCategory = cleanName;
+    });
+  }
+
+  void _submitData() {
+    final availableWallets = FinancialService.getWallets();
+
+    if (amountController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Nominal belum diisi")));
+      return;
+    }
+
+    if (selectedType == TransactionType.transfer &&
+        selectedWallet?.id == transferWallet?.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Wallet asal dan tujuan tidak boleh sama"),
+        ),
+      );
+      return;
+    }
+
+    final amount = double.tryParse(
+      amountController.text.replaceAll(".", "").replaceAll(",", ""),
+    );
+
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Nominal tidak valid")));
+      return;
+    }
+
+    final finalSelectedWallet = availableWallets.firstWhere(
+      (w) => w.id == selectedWallet?.id,
+      orElse: () => availableWallets.first,
+    );
+
+    final finalTransferWallet = availableWallets.firstWhere(
+      (w) => w.id == transferWallet?.id,
+      orElse: () => availableWallets.last,
+    );
+
+    final defaultCategories = selectedType == TransactionType.income
+        ? CategoryConstants.income
+        : CategoryConstants.expense;
+
+    final currentCategories = [
+      ...defaultCategories,
+      ...customCategories.map((e) => e.name),
+    ];
+
+    final finalCategory = currentCategories.contains(selectedCategory)
+        ? selectedCategory
+        : currentCategories.first;
+
+    final transaction = TransactionModel(
+      id:
+          widget.transaction?.id ??
+          DateTime.now().millisecondsSinceEpoch.toString(),
+      type: selectedType,
+      title: selectedType == TransactionType.transfer
+          ? "Transfer"
+          : finalCategory,
+      amount: amount,
+      date: selectedDate,
+      sourceWalletId: selectedType == TransactionType.income
+          ? null
+          : finalSelectedWallet.id,
+      destinationWalletId: selectedType == TransactionType.expense
+          ? null
+          : selectedType == TransactionType.transfer
+          ? finalTransferWallet.id
+          : finalSelectedWallet.id,
+      category: finalCategory,
+      note: noteController.text.trim(),
+    );
+
+    if (widget.transaction == null) {
+      FinancialService.addTransaction(transaction);
+    } else {
+      FinancialService.updateTransaction(transaction);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          widget.transaction == null
+              ? "Transaksi berhasil ditambahkan"
+              : "Transaksi berhasil diperbarui",
+        ),
+      ),
+    );
+
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final availableWallets = FinancialService.getWallets();
 
-    // Guard: Jika user belum punya wallet sama sekali
     if (availableWallets.isEmpty) {
       return Scaffold(
         appBar: AppBar(
@@ -108,10 +251,14 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       );
     }
 
-    // 2. AMBIL LIST KATEGORI SECARA DINAMIS BERDASARKAN JENIS TRANSAKSI
-    final currentCategories = selectedType == TransactionType.income
+    final defaultCategories = selectedType == TransactionType.income
         ? CategoryConstants.income
         : CategoryConstants.expense;
+
+    final currentCategories = [
+      ...defaultCategories,
+      ...customCategories.map((e) => e.name),
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -151,6 +298,21 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               onSelectionChanged: (value) {
                 setState(() {
                   selectedType = value.first;
+                  _loadCustomCategories();
+
+                  final defaultCategories =
+                      selectedType == TransactionType.income
+                      ? CategoryConstants.income
+                      : CategoryConstants.expense;
+
+                  final allCategories = [
+                    ...defaultCategories,
+                    ...customCategories.map((e) => e.name),
+                  ];
+
+                  if (!allCategories.contains(selectedCategory)) {
+                    selectedCategory = allCategories.first;
+                  }
                 });
               },
             ),
@@ -166,7 +328,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             ),
             const SizedBox(height: 20),
 
-            // Dropdown Wallet Utama / Wallet Asal
             DropdownButtonFormField<WalletModel>(
               initialValue: availableWallets.firstWhere(
                 (w) => w.id == selectedWallet?.id,
@@ -194,7 +355,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             if (selectedType == TransactionType.transfer) ...[
               const SizedBox(height: 20),
 
-              // Dropdown Wallet Tujuan
               DropdownButtonFormField<WalletModel>(
                 initialValue: availableWallets.firstWhere(
                   (w) => w.id == transferWallet?.id,
@@ -219,10 +379,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             ],
             const SizedBox(height: 20),
 
-            // 3. DROPDOWN KATEGORI YANG SUDAH DISESUAIKAN
             DropdownButtonFormField<String>(
-              // Proteksi crash: Jika selectedCategory lama tidak ada di list kategori yang baru,
-              // otomatis ganti valuenya ke item pertama list baru (misal: "Makan" atau "Gaji")
               initialValue: currentCategories.contains(selectedCategory)
                   ? selectedCategory
                   : currentCategories.first,
@@ -234,12 +391,24 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 return DropdownMenuItem(value: category, child: Text(category));
               }).toList(),
               onChanged: (value) {
+                if (value == null) return;
+
                 setState(() {
-                  selectedCategory = value!;
+                  selectedCategory = value;
                 });
               },
             ),
-            const SizedBox(height: 20),
+
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _addCustomCategory,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text("Tambah kategori custom"),
+              ),
+            ),
+
+            const SizedBox(height: 12),
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text("Tanggal"),
@@ -271,106 +440,76 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: () {
-                  if (amountController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Nominal belum diisi")),
-                    );
-                    return;
-                  }
-
-                  if (selectedType == TransactionType.transfer &&
-                      selectedWallet?.id == transferWallet?.id) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          "Wallet asal dan tujuan tidak boleh sama",
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-
-                  final amount = double.tryParse(
-                    amountController.text
-                        .replaceAll(".", "")
-                        .replaceAll(",", ""),
-                  );
-
-                  if (amount == null || amount <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Nominal tidak valid")),
-                    );
-                    return;
-                  }
-
-                  final finalSelectedWallet = availableWallets.firstWhere(
-                    (w) => w.id == selectedWallet?.id,
-                    orElse: () => availableWallets.first,
-                  );
-
-                  final finalTransferWallet = availableWallets.firstWhere(
-                    (w) => w.id == transferWallet?.id,
-                    orElse: () => availableWallets.last,
-                  );
-
-                  // 4. VALIDASI AKHIR KATEGORI SEBELUM DISIMPAN
-                  final finalCategory =
-                      currentCategories.contains(selectedCategory)
-                      ? selectedCategory
-                      : currentCategories.first;
-
-                  final transaction = TransactionModel(
-                    id:
-                        widget.transaction?.id ??
-                        DateTime.now().millisecondsSinceEpoch.toString(),
-                    type: selectedType,
-                    title: selectedType == TransactionType.transfer
-                        ? "Transfer"
-                        : finalCategory,
-                    amount: amount,
-                    date: selectedDate,
-                    sourceWalletId: selectedType == TransactionType.income
-                        ? null
-                        : finalSelectedWallet.id,
-                    destinationWalletId: selectedType == TransactionType.expense
-                        ? null
-                        : selectedType == TransactionType.transfer
-                        ? finalTransferWallet.id
-                        : finalSelectedWallet.id,
-                    category: finalCategory,
-                    note: noteController.text.trim(),
-                  );
-
-                  if (widget.transaction == null) {
-                    FinancialService.addTransaction(transaction);
-                  } else {
-                    FinancialService.updateTransaction(transaction);
-                  }
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        widget.transaction == null
-                            ? "Transaksi berhasil ditambahkan"
-                            : "Transaksi berhasil diperbarui",
-                      ),
-                    ),
-                  );
-
-                  Navigator.pop(context);
-                },
-                child: const Text("Simpan"),
-              ),
-            ),
           ],
         ),
       ),
+      // Tombol Simpan dipindah ke Bottom Navigation Bar dengan SafeArea
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton(
+              onPressed: _submitData,
+              child: const Text("Simpan"),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddCategoryDialog extends StatefulWidget {
+  const _AddCategoryDialog();
+
+  @override
+  State<_AddCategoryDialog> createState() => _AddCategoryDialogState();
+}
+
+class _AddCategoryDialogState extends State<_AddCategoryDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Tambah Kategori"),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: "Nama kategori",
+          hintText: "Contoh: Orang Tua",
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Batal"),
+        ),
+        FilledButton(
+          onPressed: () {
+            final value = _controller.text.trim();
+            if (value.isNotEmpty) {
+              Navigator.pop(context, value);
+            }
+          },
+          child: const Text("Tambah"),
+        ),
+      ],
     );
   }
 }

@@ -4,23 +4,53 @@ import 'package:arta/core/extensions/wallet_type_extension.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/currency_text.dart';
 import '../../../services/financial_service.dart';
+import '../../main/main_page.dart'; 
 
 class WalletCard extends StatelessWidget {
   const WalletCard({super.key});
 
-  /// Helper untuk merapikan tampilan desimal gram
   String _formatGram(double gram) {
     if (gram % 1 == 0) {
       return "${gram.toInt()} gr";
     }
+
     return "${gram.toStringAsFixed(2)} gr";
   }
 
   @override
   Widget build(BuildContext context) {
-    // Mengambil data wallet riil dari FinancialService
     final wallets = FinancialService.getWallets();
     final totalAsset = FinancialService.getTotalAsset();
+
+    if (wallets.isEmpty) {
+      return AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.account_balance_wallet_outlined),
+                SizedBox(width: 8),
+                Text(
+                  "Wallet",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text(
+                  "Belum ada wallet",
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return AppCard(
       child: Column(
@@ -36,29 +66,18 @@ class WalletCard extends StatelessWidget {
               ),
             ],
           ),
+
           const SizedBox(height: 20),
 
-          if (wallets.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: Text(
-                  "Belum ada wallet",
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-            ),
-
-          ...wallets.map((wallet) {
-            // Jika emas, ambil nilai gram. Jika bukan, ambil saldo rupiah.
+          // Tampilkan maksimal 5 wallet secara vertikal
+          ...wallets.take(5).map((wallet) {
             final balance = wallet.isGold
                 ? (wallet.gram ?? 0)
                 : FinancialService.getWalletBalance(wallet.id);
 
-            // Progress bar hanya dihitung untuk wallet rupiah
             final double percent = wallet.isGold || totalAsset == 0
                 ? 0
-                : balance / totalAsset;
+                : (balance / totalAsset).clamp(0, 1);
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 18),
@@ -78,6 +97,7 @@ class WalletCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
+
                       Expanded(
                         child: Text(
                           wallet.name,
@@ -89,9 +109,9 @@ class WalletCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+
                       const SizedBox(width: 8),
 
-                      // Tampilan angka: Gram untuk emas, Rupiah untuk dompet lain
                       wallet.isGold
                           ? Text(
                               _formatGram(balance),
@@ -108,7 +128,6 @@ class WalletCard extends StatelessWidget {
                     ],
                   ),
 
-                  // Progress Bar hanya ditampilkan jika bukan wallet emas
                   if (!wallet.isGold) ...[
                     const SizedBox(height: 10),
                     ClipRRect(
@@ -125,6 +144,23 @@ class WalletCard extends StatelessWidget {
               ),
             );
           }),
+
+          // Jika jumlah wallet > 5, tampilkan tombol navigasi tab
+          if (wallets.length > 5) ...[
+            const SizedBox(height: 4),
+
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  // Mengubah index notifier ke 1 (tab Wallet) tanpa Navigator.push
+                  mainPageIndexNotifier.value = 1;
+                },
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text("Lihat semua wallet"),
+              ),
+            ),
+          ],
         ],
       ),
     );

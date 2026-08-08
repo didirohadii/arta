@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../data/models/saving_target_model.dart';
 import '../../core/widgets/currency_text.dart';
 import '../../services/financial_service.dart';
+import 'saving_target_detail_page.dart';
 import 'add_saving_target_page.dart';
 
 class SavingTargetPage extends StatelessWidget {
@@ -79,7 +80,7 @@ class SavingTargetPage extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
-                                  AddSavingTargetPage(target: target),
+                                  SavingTargetDetailPage(target: target),
                             ),
                           );
                         },

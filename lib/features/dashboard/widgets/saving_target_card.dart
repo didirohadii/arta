@@ -10,6 +10,25 @@ import '../../goals/saving_target_page.dart';
 class SavingTargetCard extends StatelessWidget {
   const SavingTargetCard({super.key});
 
+  String _formatTargetDate(DateTime date) {
+    const months = [
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
+    ];
+
+    return "${months[date.month - 1]} ${date.year}";
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder(
@@ -192,11 +211,11 @@ class SavingTargetCard extends StatelessWidget {
                             : "Rp ${remaining.toStringAsFixed(0)}",
                       ),
                     ),
-                    const Expanded(
+                    Expanded(
                       child: _InfoItem(
                         icon: Icons.calendar_month,
                         title: "Estimasi",
-                        value: "April 2028",
+                        value: _formatTargetDate(saving.targetDate),
                       ),
                     ),
                   ],

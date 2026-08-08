@@ -66,7 +66,7 @@ class DashboardPage extends StatelessWidget {
 
           return SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

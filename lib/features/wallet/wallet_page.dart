@@ -5,6 +5,8 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/currency_text.dart';
 import '../../core/widgets/wallet_tile.dart';
 import '../../services/financial_service.dart';
+import '../../data/models/wallet_model.dart'; // Menambahkan import WalletType jika diperlukan
+import 'wallet_detail_page.dart';
 import 'add_wallet_page.dart';
 import 'widgets/add_gold_bottom_sheet.dart';
 
@@ -21,8 +23,25 @@ class _WalletPageState extends State<WalletPage> {
     return ValueListenableBuilder(
       valueListenable: FinancialService.refreshNotifier,
       builder: (context, _, _) {
-        // Mengambil data wallet langsung dari FinancialService
-        final wallets = FinancialService.getWallets();
+        // 1. Pembagian wallet berdasarkan WalletType
+        final allWallets = FinancialService.getWallets();
+
+        final goldWallets = allWallets
+            .where((wallet) => wallet.type == WalletType.gold)
+            .toList();
+
+        final investmentWallets = allWallets
+            .where((wallet) => wallet.type == WalletType.investment)
+            .toList();
+
+        final wallets = allWallets
+            .where(
+              (wallet) =>
+                  wallet.type != WalletType.gold &&
+                  wallet.type != WalletType.investment,
+            )
+            .toList();
+
         final totalAsset = FinancialService.getTotalAsset();
 
         return Scaffold(
@@ -54,9 +73,123 @@ class _WalletPageState extends State<WalletPage> {
                   ],
                 ),
               ),
+
               const SizedBox(height: 20),
 
-              // Card Daftar Wallet
+              // ============================
+              // SECTION EMAS
+              // ============================
+              if (goldWallets.isNotEmpty) ...[
+                const Text(
+                  "Emas",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                AppCard(
+                  child: Column(
+                    children: goldWallets.map((wallet) {
+                      return Column(
+                        children: [
+                          InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      WalletDetailPage(wallet: wallet),
+                                ),
+                              );
+                              if (mounted) setState(() {});
+                            },
+                            child: WalletTile(
+                              icon: wallet.type.icon,
+                              color: wallet.type.color,
+                              title: wallet.name,
+                              amount: wallet.gram ?? 0,
+                              isGold: true,
+                            ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                right: 12,
+                                bottom: 8,
+                              ),
+                              child: TextButton.icon(
+                                icon: const Icon(
+                                  Icons.add_circle_outline,
+                                  size: 18,
+                                ),
+                                label: const Text("Tambah Emas"),
+                                onPressed: () async {
+                                  await showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder: (_) =>
+                                        AddGoldBottomSheet(wallet: wallet),
+                                  );
+                                  if (mounted) setState(() {});
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // ============================
+              // SECTION INVESTASI
+              // ============================
+              if (investmentWallets.isNotEmpty) ...[
+                const Text(
+                  "Investasi",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                AppCard(
+                  child: Column(
+                    children: investmentWallets.map((wallet) {
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => WalletDetailPage(wallet: wallet),
+                            ),
+                          );
+                          if (mounted) setState(() {});
+                        },
+                        child: WalletTile(
+                          icon: wallet.type.icon,
+                          color: wallet.type.color,
+                          title: wallet.name,
+                          amount: FinancialService.getWalletBalance(wallet.id),
+                          isGold: false,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // ============================
+              // SECTION WALLET UTAMA
+              // ============================
+              const Text(
+                "Wallet",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+
+              const SizedBox(height: 10),
+
               AppCard(
                 child: wallets.isEmpty
                     ? const Padding(
@@ -75,134 +208,27 @@ class _WalletPageState extends State<WalletPage> {
                         itemBuilder: (context, index) {
                           final wallet = wallets[index];
 
-                          return Dismissible(
-                            key: ValueKey(wallet.id),
-                            direction: DismissDirection.endToStart,
-                            confirmDismiss: (_) async {
-                              final used = FinancialService.isWalletUsed(
-                                wallet.id,
+                          // Dismissible dihapus, diganti langsung dengan InkWell
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      WalletDetailPage(wallet: wallet),
+                                ),
                               );
-
-                              // Proteksi jika wallet sedang digunakan di Transaksi atau Saving Target
-                              if (used) {
-                                final dependencies =
-                                    FinancialService.getWalletDependencies(
-                                      wallet.id,
-                                    );
-
-                                showDialog(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    title: const Text(
-                                      "Wallet tidak dapat dihapus",
-                                    ),
-                                    content: Text(
-                                      "Wallet ini masih digunakan oleh:\n\n• ${dependencies.join("\n• ")}",
-                                    ),
-                                    actions: [
-                                      FilledButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: const Text("OK"),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                return false;
-                              }
-
-                              // Konfirmasi hapus jika wallet kosong/tidak digunakan
-                              return await showDialog<bool>(
-                                    context: context,
-                                    builder: (_) => AlertDialog(
-                                      title: const Text("Hapus Wallet"),
-                                      content: Text(
-                                        "Yakin ingin menghapus ${wallet.name}?",
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context, false),
-                                          child: const Text("Batal"),
-                                        ),
-                                        FilledButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context, true),
-                                          child: const Text("Hapus"),
-                                        ),
-                                      ],
-                                    ),
-                                  ) ??
-                                  false;
+                              if (mounted) setState(() {});
                             },
-                            onDismissed: (_) {
-                              FinancialService.deleteWallet(wallet.id);
-                            },
-                            background: Container(
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 24),
-                              color: Colors.red,
-                              child: const Icon(
-                                Icons.delete,
-                                color: Colors.white,
+                            child: WalletTile(
+                              icon: wallet.type.icon,
+                              color: wallet.type.color,
+                              title: wallet.name,
+                              amount: FinancialService.getWalletBalance(
+                                wallet.id,
                               ),
-                            ),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(16),
-                              onTap: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        AddWalletPage(wallet: wallet),
-                                  ),
-                                );
-                                if (mounted) setState(() {});
-                              },
-                              child: Column(
-                                children: [
-                                  WalletTile(
-                                    icon: wallet.type.icon,
-                                    color: wallet.type.color,
-                                    title: wallet.name,
-                                    amount: wallet.isGold
-                                        ? (wallet.gram ?? 0)
-                                        : FinancialService.getWalletBalance(
-                                            wallet.id,
-                                          ),
-                                    isGold: wallet.isGold,
-                                  ),
-
-                                  if (wallet.isGold)
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 12,
-                                          bottom: 8,
-                                        ),
-                                        child: TextButton.icon(
-                                          icon: const Icon(
-                                            Icons.add_circle_outline,
-                                            size: 18,
-                                          ),
-                                          label: const Text("Tambah Emas"),
-                                          onPressed: () async {
-                                            await showModalBottomSheet(
-                                              context: context,
-                                              isScrollControlled: true,
-                                              builder: (_) =>
-                                                  AddGoldBottomSheet(
-                                                    wallet: wallet,
-                                                  ),
-                                            );
-
-                                            if (mounted) setState(() {});
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
+                              isGold: false,
                             ),
                           );
                         },

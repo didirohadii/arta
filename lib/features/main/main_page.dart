@@ -7,6 +7,9 @@ import '../transaction/transaction_page.dart';
 import '../wallet/wallet_page.dart';
 import '../transaction/add_transaction_page.dart';
 
+// 1. Notifier global untuk kontrol tab navigasi dari mana saja
+final ValueNotifier<int> mainPageIndexNotifier = ValueNotifier<int>(0);
+
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
 
@@ -24,6 +27,26 @@ class _MainPageState extends State<MainPage> {
     AnalyticsPage(),
     SettingsPage(),
   ];
+
+  // 2. Pasang listener untuk memantau perubahan tab
+  @override
+  void initState() {
+    super.initState();
+    mainPageIndexNotifier.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (!mounted) return;
+    setState(() {
+      currentIndex = mainPageIndexNotifier.value;
+    });
+  }
+
+  @override
+  void dispose() {
+    mainPageIndexNotifier.removeListener(_onTabChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,10 +78,9 @@ class _MainPageState extends State<MainPage> {
         selectedIndex: currentIndex,
         height: 70,
 
+        // 3. Update nilai notifier ketika tab ditekan
         onDestinationSelected: (index) {
-          setState(() {
-            currentIndex = index;
-          });
+          mainPageIndexNotifier.value = index;
         },
 
         destinations: const [

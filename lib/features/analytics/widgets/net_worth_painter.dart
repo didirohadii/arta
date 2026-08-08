@@ -40,21 +40,11 @@ class NetWorthPainter extends CustomPainter {
         path.lineTo(dx, dy);
       }
 
+      // Titik pada grafik
       canvas.drawCircle(Offset(dx, dy), 4, pointPaint);
-
-      final tp = TextPainter(
-        text: TextSpan(
-          text: "${(data[i].amount / 1000).round()}K",
-          style: const TextStyle(color: Colors.white, fontSize: 10),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-
-      tp.layout();
-
-      tp.paint(canvas, Offset(dx - tp.width / 2, dy - 22));
     }
 
+    // Garis grafik
     canvas.drawPath(path, paintLine);
   }
 
